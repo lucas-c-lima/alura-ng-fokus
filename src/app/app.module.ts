@@ -9,15 +9,13 @@ import { TaskManagerComponent } from './shared/components/task-manager/task-mana
 import { AppComponent } from './app.component';
 import { ServiceWorkerModule } from '@angular/service-worker';
 import { BrowserModule } from '@angular/platform-browser';
-
-
+import { HttpClientModule } from '@angular/common/http';
 
 @NgModule({
-  declarations: [
-    AppComponent
-  ],
+  declarations: [AppComponent],
   imports: [
     BrowserModule,
+    HttpClientModule,
     CommonModule,
     RouterOutlet,
     HeaderComponent,
@@ -27,9 +25,9 @@ import { BrowserModule } from '@angular/platform-browser';
     TaskManagerComponent,
     ServiceWorkerModule.register('ngsw-worker.js', {
       enabled: !isDevMode(),
-      registrationStrategy: 'registerWhenStable:30000'
-    })
+      registrationStrategy: 'registerWhenStable:30000',
+    }),
   ],
   bootstrap: [AppComponent],
 })
-export class AppModule { }
+export class AppModule {}

@@ -1,22 +1,21 @@
 import { Howl } from 'howler';
 import { CommonModule } from '@angular/common';
-import { Component, effect, Inject, inject } from '@angular/core';
+import { Component, effect, Inject, inject, OnInit } from '@angular/core';
 import { ContextService, ContextType } from '../../services/context.service';
 import { FormsModule } from '@angular/forms';
 import { AudioService } from '../../services/audio.service';
+import { NotificationService } from '../../services/notification.service';
+import { SwPush } from '@angular/service-worker';
+import { NotificationMessage } from '../../services/notification-message';
 
 @Component({
   selector: 'app-timer-control',
   standalone: true,
-  imports: [
-    FormsModule,
-    CommonModule
-  ],
+  imports: [FormsModule, CommonModule],
   templateUrl: './timer-control.component.html',
-  styleUrl: './timer-control.component.scss'
+  styleUrl: './timer-control.component.scss',
 })
-export class TimerControlComponent {
-
+export class TimerControlComponent implements OnInit {
   timerFormat = '';
 
   isTimerStarted = false;
@@ -32,16 +31,28 @@ export class TimerControlComponent {
 
   context = this.contextService.contextSignal$;
 
-  constructor() {
+  constructor(
+    private swPush: SwPush,
+    private notificationService: NotificationService
+  ) {
     effect(() => {
       this.setTimerSecond();
       this.configTimer();
     });
   }
 
+  ngOnInit(): void {
+    this.swPush.messages.subscribe((message) => {
+      const notificationMessage = message as NotificationMessage;
+      this.notificationService.showNotification('Notification', {
+        body: notificationMessage.body,
+      });
+    });
+  }
+
   onStartClick(): void {
     this.intervalId = setInterval(() => {
-      this.countdown()
+      this.countdown();
     }, 1000);
 
     this.isTimerStarted = true;
@@ -76,6 +87,7 @@ export class TimerControlComponent {
       this.setTimerSecond();
       this.configTimer();
 
+      this.sendNotification();
       return;
     }
 
@@ -89,8 +101,10 @@ export class TimerControlComponent {
   }
 
   private configTimer(): void {
-    this.timerFormat = new Date(this.timerInSeconds * 1000)
-      .toLocaleTimeString('pt-Br', {minute: '2-digit', second: '2-digit'});
+    this.timerFormat = new Date(this.timerInSeconds * 1000).toLocaleTimeString(
+      'pt-Br',
+      { minute: '2-digit', second: '2-digit' }
+    );
   }
 
   private setTimerSecond(): void {
@@ -104,6 +118,27 @@ export class TimerControlComponent {
       case 'descanso-longo':
         this.timerInSeconds = 15;
         break;
+    }
+  }
+
+  private async sendNotification() {
+    try {
+      await this.notificationService.requestPermission();
+
+      const context = this.context();
+
+      if (context.includes('descanso')) {
+        this.notificationService.showNotification('Notificação', {
+          body: 'Tempo de descanso finalizado!',
+        });
+        return;
+      }
+
+      this.notificationService.showNotification('Notificação', {
+        body: 'Tempo de foco finalizado!',
+      });
+    } catch (error) {
+      console.error('Error sending notification:', error);
     }
   }
 }
