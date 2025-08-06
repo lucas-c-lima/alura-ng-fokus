@@ -1,32 +1,42 @@
 import { CommonModule } from '@angular/common';
-import { Component } from '@angular/core';
+import { AfterViewInit, Component } from '@angular/core';
 import { TaskListComponent } from './task-list/task-list.component';
 import { TaskItem } from './task-item';
 import { v4 as uuidv4 } from 'uuid';
-import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
+import {
+  FormBuilder,
+  FormGroup,
+  ReactiveFormsModule,
+  Validators,
+} from '@angular/forms';
+import { IndexedDbService } from '../../services/indexed-db.service';
 
 @Component({
   selector: 'app-task-manager',
   standalone: true,
-  imports: [
-    CommonModule,
-    TaskListComponent,
-    ReactiveFormsModule
-  ],
+  imports: [CommonModule, TaskListComponent, ReactiveFormsModule],
   templateUrl: './task-manager.component.html',
-  styleUrl: './task-manager.component.scss'
+  styleUrl: './task-manager.component.scss',
 })
-export class TaskManagerComponent {
-
+export class TaskManagerComponent implements AfterViewInit {
   taskForm: FormGroup;
   hasShowForm = false;
 
   tasks: TaskItem[] = [];
   taskItemSelected: TaskItem | null = null;
 
-  constructor(private fb: FormBuilder) {
+  constructor(
+    private fb: FormBuilder,
+    private indexedDbService: IndexedDbService
+  ) {
     this.taskForm = this.fb.group({
-      description: ['', Validators.required]
+      description: ['', Validators.required],
+    });
+  }
+
+  ngAfterViewInit(): void {
+    this.indexedDbService.listAllTasks().subscribe((tasks) => {
+      this.tasks = tasks;
     });
   }
 
@@ -38,7 +48,7 @@ export class TaskManagerComponent {
   onTaskListClick(taskItem: TaskItem): void {
     this.tasks = this.tasks.map((task: TaskItem) => ({
       ...task,
-      isActive: task.uuid === taskItem.uuid ? true : false
+      isActive: task.uuid === taskItem.uuid ? true : false,
     }));
 
     this.taskItemSelected = taskItem;
@@ -50,10 +60,12 @@ export class TaskManagerComponent {
     const taskItem = {
       uuid: uuidv4(),
       description: description,
-      isActive: false
+      isActive: false,
     };
 
     this.tasks.push(taskItem);
+
+    this.indexedDbService.addTask(taskItem).subscribe();
 
     this.hasShowForm = false;
   }
