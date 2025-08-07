@@ -2,6 +2,7 @@ import { isPlatformBrowser } from '@angular/common';
 import { Inject, Injectable, PLATFORM_ID } from '@angular/core';
 import { BehaviorSubject, filter, Observable, switchMap, take } from 'rxjs';
 import { TaskItem } from '../components/task-manager/task-item';
+import CryptoJS from 'crypto-js';
 
 @Injectable({
   providedIn: 'root',
@@ -10,6 +11,8 @@ export class IndexedDbService {
   private readonly db$ = new BehaviorSubject<IDBDatabase | null>(null);
   private readonly store = { name: 'tasks', key: 'uuid' };
   private dbReady$ = new BehaviorSubject<boolean>(false);
+
+  private readonly secretKey = 'caad7153-27bf-43b7-896f-8cf21e28d846';
 
   constructor(@Inject(PLATFORM_ID) private platformId: Object) {
     if (isPlatformBrowser(this.platformId)) {
@@ -31,6 +34,18 @@ export class IndexedDbService {
       this.db$.next((e.target as IDBOpenDBRequest).result);
       this.dbReady$.next(true);
     };
+  }
+
+  private encrypt(data: any): string {
+    return CryptoJS.AES.encrypt(
+      JSON.stringify(data),
+      this.secretKey
+    ).toString();
+  }
+
+  private decrypt(encryptedData: string): any {
+    const bytes = CryptoJS.AES.decrypt(encryptedData, this.secretKey);
+    return JSON.parse(bytes.toString(CryptoJS.enc.Utf8));
   }
 
   private waitForDB(): Observable<boolean> {
@@ -61,7 +76,14 @@ export class IndexedDbService {
       switchMap(
         () =>
           new Observable<TaskItem>((observer) => {
-            const req = this.store$.add(task);
+            const encryptedTask = {
+              uuid: task.uuid,
+              encryptedData: this.encrypt({
+                ...task,
+              }),
+            };
+
+            const req = this.store$.add(encryptedTask);
             req.onsuccess = () => {
               observer.next(task);
               observer.complete();
@@ -81,8 +103,23 @@ export class IndexedDbService {
           new Observable<TaskItem[]>((observer) => {
             const req = this.store$.getAll();
             req.onsuccess = () => {
-              observer.next(req.result);
-              observer.complete();
+              try {
+                const decryptedTasks = req.result.map((encryptedTask) => {
+                  const decryptedData = this.decrypt(
+                    encryptedTask.encryptedData
+                  );
+                  return {
+                    ...decryptedData,
+                    uuid: encryptedTask.uuid,
+                  };
+                });
+
+                observer.next(decryptedTasks);
+                observer.complete();
+              } catch (error) {
+                observer.error('Decryption failed: ' + error);
+                return;
+              }
             };
             req.onerror = () => {
               observer.error(req.error);
